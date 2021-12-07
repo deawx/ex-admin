@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>接口文档</title>
+    <link href="/apidoc/css/tailwind" rel="stylesheet">
+    <script src="/apidoc/js/highlight"></script>
+    <script src="/apidoc/js/vue"></script>
+    <script src="/apidoc/js/axios"></script>
+    <style>
+        html,body{
+            height: 100%;
+            font-family: Open Sans,sans-serif;
+        }
+        .triangle-right {
+            width: 0;
+            height: 0;
+            border-top: 4px solid transparent;
+            border-left: 8px solid #cccccc;
+            border-bottom: 4px solid transparent;
+        }
+        .triangle-down {
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 8px solid #cccccc;
+        }
+        .menu-item > .menu-item{
+            margin-left: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="flex h-full" id="app">
+    <div class="w-80 bg-gray-50 p-3 shadow-2xl overflow-y-auto">
+        <div class="flex items-center mb-3">
+            <div class="bg-gray-200 text-gray-800 font-medium p-1 rounded text-sm flex-1">{:sysconf('web_name')}</div>
+            <button type="button" class="ml-3 p-1 text-xs rounded-md border shadow bg-red-500 text-white hover:bg-red-400" @click="reload">强制刷新</button>
+        </div>
+
+        <input v-model="menuSearch" type="text" placeholder="搜索" class="w-full px-4 py-1 leading-5 border mb-3 rounded-md focus:outline-none focus:ring focus:border-blue-200" />
+        <div class="menu">
+            <menu-list v-for="item in menuList" :data="item" :open-ids.sync="menuOpenIds"></menu-list>
+        </div>
+    </div>
+    <div class="w-full overflow-y-auto" @scroll="layzResponse">
+        <doc-item v-for="item in menuList" :data="item" :key="item.id"></doc-item>
+    </div>
+</div>
+<script src="/apidoc/js/index"></script>
+<script>
+    var app = new Vue({
+        el: '#app',
+        data: {
+            menuSearch:'',
+            menuOpenIds:[],
+            menus:eval('{$data|raw|json_encode}'),
+            iframes:[],
+        },
+        computed:{
+            menuList(){
+                return this.filterTree(this.menus)
+            }
+        },
+        mounted(){
+            this.iframes = document.getElementsByTagName('iframe')
+            this.layzResponse()
+        },
+        methods:{
+            layzResponse(){
+                for(var i = 0,len = this.iframes.length; i < len; i++){
+                    let iframeElement = this.iframes[i]
+                    let top = iframeElement.getBoundingClientRect().top
+                    if(top > 0 && top < document.documentElement.clientHeight && !iframeElement.isLoad){
+                        iframeElement.isLoad = true
+                        let html = decodeURIComponent(this.iframes[i].getAttribute('data-response'))
+                        let iframeDoc = iframeElement.contentDocument || iframeElement.contentWindow.document;
+                        html =  hljs.highlight(html, {language: 'json'}).value
+                        html = '<pre><code class="hljs" style="background: none;">'+html+"</code></pre>"
+                        iframeDoc.open();
+                        iframeDoc.write("<link rel='stylesheet' type='text/css' href='/apidoc/css/androidstudio'/>");
+                        iframeDoc.write(html);
+                        iframeDoc.close();
+                        setTimeout(()=>{
+                            if(iframeDoc.body.scrollHeight >= 500){
+                                iframeElement.height = 500
+                            }else{
+                                iframeElement.height = iframeDoc.body.scrollHeight
+                            }
+                        })
+                    }
+                }
+
+            },
+            reload(){
+                axios('/apidoc/clear').then(()=>{
+                    location.reload()
+                })
+            },
+            filterTree(tree, arr = []){
+                let name = 'name'
+                let children = 'children'
+                if (!tree.length) return []
+                for (let item of tree) {
+                    // 循环数组，然后过滤数据
+                    // 如果该条数据type不为0时，跳出本次循环
+                    if (item[name].indexOf(this.menuSearch) >-1){
+                        // 如果满足条件时，用新node代替，然后把chilren清空
+                        let node = {...item, children: []}
+                        // 然后添加到新数组中
+                        arr.push(node)
+                        // 如果有子节点，调用递归函数，并把空数组传给下一个函数
+                        // 利用引用数据类型的特性，实现浅拷贝
+                        // 递归函数过滤时会改变这个空数组数据，从而实现层级结构过滤
+                        if (item[children] && item[children].length) {
+                            this.filterTree(item[children], node.children)
+                        }
+                    }else if (item[children] && item[children].length) {
+                        this.filterTree(item[children], arr)
+                    }
+                }
+                return arr
+            }
+        }
+    })
+</script>
+</body>
+</html>
